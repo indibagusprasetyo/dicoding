@@ -7,24 +7,22 @@ import seaborn as sns
 # Fungsi untuk membaca dataset
 @st.cache_data
 def load_data():
-    customers = pd.read_csv("data/customers.csv")
-    geo = pd.read_csv("data/geo.csv")
-    orderitems = pd.read_csv("data/orderitems.csv")
-    orders = pd.read_csv("data/orders.csv")
-    products = pd.read_csv("data/products.csv")
-    product_translate = pd.read_csv("data/producttranslate.csv")
-    return customers, geo, orderitems, orders, products, product_translate
+    customers = pd.read_csv("../data/customers.csv")
+    orderitems = pd.read_csv("../data/orderitems.csv")
+    orders = pd.read_csv("../data/orders.csv")
+    products = pd.read_csv("../data/products.csv")
+    product_translate = pd.read_csv("../data/producttranslate.csv")
+    return customers, orderitems, orders, products, product_translate
 
 # Fungsi untuk membersihkan dataset
-def clean_data(geo, orders, products, product_translate):
-    geo = geo.drop_duplicates()
+def clean_data(orders, products, product_translate):
     orders['order_approved_at'] = pd.to_datetime(orders['order_approved_at'], errors='coerce')
     orders['order_delivered_carrier_date'] = pd.to_datetime(orders['order_delivered_carrier_date'], errors='coerce')
     orders['order_delivered_customer_date'] = pd.to_datetime(orders['order_delivered_customer_date'], errors='coerce')
     orders['order_purchase_timestamp'] = pd.to_datetime(orders['order_purchase_timestamp'])
     orders['order_estimated_delivery_date'] = pd.to_datetime(orders['order_estimated_delivery_date'])
     products = products.merge(product_translate, on="product_category_name", how="left")
-    return geo, orders, products
+    return orders, products
 
 # Fungsi analisis data umum
 def data_summary(data, dataset_name):
@@ -52,11 +50,6 @@ def shipping_analysis(orders):
     avg_delivery_time = valid_orders['delivery_time'].mean()
     return avg_delivery_time, valid_orders
 
-# Fungsi untuk analisis lokasi geografis
-def location_analysis(geo):
-    location_counts = geo['geolocation_city'].value_counts().head(10)
-    return location_counts
-
 # Fungsi visualisasi
 def plot_bar(data, title, xlabel, ylabel, color="skyblue"):
     fig, ax = plt.subplots()
@@ -75,14 +68,14 @@ def plot_histogram(data, title, xlabel, ylabel, bins=20, color="green"):
     return fig
 
 # Load dan bersihkan data
-customers, geo, orderitems, orders, products, product_translate = load_data()
-geo, orders, products = clean_data(geo, orders, products, product_translate)
+customers, orderitems, orders, products, product_translate = load_data()
+orders, products = clean_data(orders, products, product_translate)
 
 # Layout aplikasi
 st.title("Dashboard Analisis E-Commerce")
 st.markdown("""
 Selamat datang di **Dashboard Analisis E-Commerce**!  
-Dashboard ini membantu Anda memahami berbagai aspek dari aktivitas penjualan, pengiriman, dan lokasi geografis.  
+Dashboard ini membantu Anda memahami berbagai aspek dari aktivitas penjualan dan pengiriman.  
 Gunakan menu di samping untuk navigasi.
 """)
 
@@ -92,7 +85,6 @@ menu = st.sidebar.radio("Pilih Menu", [
     "Summary Dataset", 
     "Analisis Produk Terpopuler", 
     "Analisis Pengiriman", 
-    "Analisis Geografis", 
     "Kesimpulan"
 ])
 
@@ -105,17 +97,14 @@ if menu == "Overview":
     2. **Exploratory Data Analysis**:
        - Analisis produk terpopuler.
        - Analisis waktu pengiriman.
-       - Analisis lokasi geografis.
     3. **Kesimpulan**: Menyusun temuan utama untuk mendukung pengambilan keputusan bisnis.
     """)
 
 # Menu Summary Dataset
 elif menu == "Summary Dataset":
-    dataset = st.selectbox("Pilih Dataset", ["Customers", "Geo", "Order Items", "Orders", "Products"])
+    dataset = st.selectbox("Pilih Dataset", ["Customers", "Order Items", "Orders", "Products"])
     if dataset == "Customers":
         data_summary(customers, "Customers")
-    elif dataset == "Geo":
-        data_summary(geo, "Geo")
     elif dataset == "Order Items":
         data_summary(orderitems, "Order Items")
     elif dataset == "Orders":
@@ -145,15 +134,6 @@ elif menu == "Analisis Pengiriman":
     )
     st.pyplot(fig)
 
-# Menu Analisis Geografis
-elif menu == "Analisis Geografis":
-    st.subheader("Analisis Lokasi Geografis")
-    location_counts = location_analysis(geo)
-    st.markdown("**Top 10 Kota dengan Aktivitas E-Commerce Tertinggi:**")
-    st.bar_chart(location_counts)
-    fig = plot_bar(location_counts, "Top 10 Kota dengan Aktivitas Tertinggi", "Kota", "Jumlah Aktivitas", color="orange")
-    st.pyplot(fig)
-
 # Menu Kesimpulan
 elif menu == "Kesimpulan":
     st.subheader("Kesimpulan")
@@ -174,18 +154,12 @@ elif menu == "Kesimpulan":
         "Jumlah Pengiriman"
     )
     st.pyplot(fig)
-    
-    # 3. Lokasi Geografis
-    st.markdown("#### Aktivitas E-Commerce Berdasarkan Lokasi")
-    location_counts = location_analysis(geo)
-    st.bar_chart(location_counts)
 
     # Kesimpulan
     st.markdown("""
     **Kesimpulan Akhir**:
     - **Produk Populer**: Kategori tertentu memiliki permintaan lebih tinggi, seperti elektronik, kecantikan, dan rumah tangga.
     - **Pengiriman**: Rata-rata waktu pengiriman dari carrier ke pelanggan adalah **8,88 hari**.
-    - **Geografis**: Kota besar mendominasi aktivitas e-commerce.
     """)
 
 # Footer
