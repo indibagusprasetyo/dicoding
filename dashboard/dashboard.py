@@ -7,11 +7,11 @@ import seaborn as sns
 # Fungsi untuk membaca dataset
 @st.cache_data
 def load_data():
-    customers = pd.read_csv("../data/customers.csv")
-    orderitems = pd.read_csv("../data/orderitems.csv")
-    orders = pd.read_csv("../data/orders.csv")
-    products = pd.read_csv("../data/products.csv")
-    product_translate = pd.read_csv("../data/producttranslate.csv")
+    customers = pd.read_csv("data/customers.csv")
+    orderitems = pd.read_csv("data/orderitems.csv")
+    orders = pd.read_csv("data/orders.csv")
+    products = pd.read_csv("data/products.csv")
+    product_translate = pd.read_csv("data/producttranslate.csv")
     return customers, orderitems, orders, products, product_translate
 
 # Fungsi untuk membersihkan dataset
