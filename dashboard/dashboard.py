@@ -11,7 +11,7 @@ st.title("Dashboard Analisis Data E-Commerce")
 st.write("Visualisasi data dari berbagai dataset terkait e-commerce.")
 
 # Load datasets
-data_path = "../data/"
+data_path = "data/"
 customers_df = pd.read_csv(data_path + "customers.csv")
 orderitems_df = pd.read_csv(data_path + "orderitems.csv")
 orderpays_df = pd.read_csv(data_path + "orderpays.csv")
