@@ -1,196 +1,122 @@
 import streamlit as st
 import pandas as pd
-import numpy as np
 import matplotlib.pyplot as plt
 import seaborn as sns
+import datetime as dt
 
-# Fungsi untuk membaca dataset
-@st.cache_data
-def load_data():
-    customers = pd.read_csv("data/customers.csv")
-    geo = pd.read_csv("data/geo.csv")
-    orderitems = pd.read_csv("data/orderitems.csv")
-    orders = pd.read_csv("data/orders.csv")
-    products = pd.read_csv("data/products.csv")
-    product_translate = pd.read_csv("data/producttranslate.csv")
-    return customers, geo, orderitems, orders, products, product_translate
+# Title
+st.title("Dashboard Analisis Data E-Commerce")
 
-# Fungsi untuk membersihkan dataset
-def clean_data(geo, orders, products, product_translate):
-    geo = geo.drop_duplicates()
-    orders['order_approved_at'] = pd.to_datetime(orders['order_approved_at'], errors='coerce')
-    orders['order_delivered_carrier_date'] = pd.to_datetime(orders['order_delivered_carrier_date'], errors='coerce')
-    orders['order_delivered_customer_date'] = pd.to_datetime(orders['order_delivered_customer_date'], errors='coerce')
-    orders['order_purchase_timestamp'] = pd.to_datetime(orders['order_purchase_timestamp'])
-    orders['order_estimated_delivery_date'] = pd.to_datetime(orders['order_estimated_delivery_date'])
-    products = products.merge(product_translate, on="product_category_name", how="left")
-    return geo, orders, products
+# Description
+st.write("Visualisasi data dari berbagai dataset terkait e-commerce.")
 
-# Fungsi analisis data umum
-def data_summary(data, dataset_name):
-    st.write(f"### {dataset_name} Summary (Setelah Cleaning)")
-    st.write(data.describe(include='all'))
-    st.write("### Missing Values")
-    st.write(data.isna().sum())
-    st.write("### Duplikasi Data")
-    st.write(f"Jumlah duplikasi: {data.duplicated().sum()}")
-    st.write("### Cuplikan Data")
-    st.write(data.head())
+# Load datasets
+data_path = "../data/"
+customers_df = pd.read_csv(data_path + "customers.csv")
+orderitems_df = pd.read_csv(data_path + "orderitems.csv")
+orderpays_df = pd.read_csv(data_path + "orderpays.csv")
+orderreviews_df = pd.read_csv(data_path + "orderreviews.csv")
+products_df = pd.read_csv(data_path + "products.csv")
+product_translate_df = pd.read_csv(data_path + "producttranslate.csv")
 
-# Fungsi untuk menghitung produk terpopuler
-def popular_products(orderitems, products):
-    merged_data = orderitems.merge(products, on='product_id', how='inner')
-    top_products = merged_data['product_category_name_english'].value_counts().head(10)
-    return top_products
+# Merge product translations
+if "product_category_name" in products_df.columns and "product_category_name" in product_translate_df.columns:
+    products_df = products_df.merge(product_translate_df, on="product_category_name", how="left")
+else:
+    st.error("Kolom 'product_category_name' tidak ditemukan dalam dataset produk atau terjemahan produk.")
 
-# Fungsi untuk menghitung rata-rata waktu pengiriman
-def shipping_analysis(orders):
-    valid_orders = orders.dropna(subset=['order_delivered_carrier_date', 'order_delivered_customer_date'])
-    valid_orders['delivery_time'] = (
-        valid_orders['order_delivered_customer_date'] - valid_orders['order_delivered_carrier_date']
+if "product_id" in orderitems_df.columns and "product_id" in products_df.columns:
+    orderitems_df = orderitems_df.merge(products_df, on="product_id", how="left")
+else:
+    st.error("Kolom 'product_id' tidak ditemukan dalam dataset order items atau produk.")
+
+# Show a sample of each dataset
+st.header("Preview Dataset")
+with st.expander("Customers Dataset"):
+    st.write(customers_df.head())
+
+with st.expander("Order Items Dataset"):
+    st.write(orderitems_df.head())
+
+with st.expander("Order Payments Dataset"):
+    st.write(orderpays_df.head())
+
+with st.expander("Order Reviews Dataset"):
+    st.write(orderreviews_df.head())
+
+# Visualization 1: Top Categories
+st.header("Visualisasi 1: Top 10 Produk Terlaris Berdasarkan Nama (Bahasa Inggris)")
+if "product_category_name_english" in orderitems_df.columns:
+    top_products = orderitems_df['product_category_name_english'].value_counts().head(10)
+    fig1, ax1 = plt.subplots()
+    sns.barplot(x=top_products.values, y=top_products.index, ax=ax1)
+    ax1.set_title("Top 10 Produk Terlaris")
+    ax1.set_xlabel("Jumlah Pesanan")
+    ax1.set_ylabel("Nama Kategori Produk")
+    st.pyplot(fig1)
+else:
+    st.error("Kolom 'product_category_name_english' tidak ditemukan dalam dataset.")
+
+# Visualization 2: Pola Keterlambatan Berdasarkan Lokasi
+st.header("Visualisasi 2: Pola Keterlambatan Berdasarkan Lokasi (State)")
+orders_df = pd.read_csv(data_path + "orders.csv")
+orders_df['order_delivered_customer_date'] = pd.to_datetime(orders_df['order_delivered_customer_date'], errors='coerce')
+orders_df['order_estimated_delivery_date'] = pd.to_datetime(orders_df['order_estimated_delivery_date'], errors='coerce')
+customers_df['customer_state'] = customers_df['customer_state'].fillna('Unknown')
+
+# Gabungkan informasi lokasi pelanggan dari customers_df ke orders_df
+if "customer_id" in orders_df.columns and "customer_id" in customers_df.columns:
+    orders_df = pd.merge(orders_df, customers_df[['customer_id', 'customer_state']], on='customer_id', how='left')
+else:
+    st.error("Kolom 'customer_id' tidak ditemukan dalam dataset orders atau customers.")
+
+# Hitung keterlambatan pengiriman
+if 'order_delivered_customer_date' in orders_df.columns and 'order_estimated_delivery_date' in orders_df.columns:
+    orders_df['delivery_delay_days'] = (
+        orders_df['order_delivered_customer_date'] - orders_df['order_estimated_delivery_date']
     ).dt.days
-    avg_delivery_time = valid_orders['delivery_time'].mean()
-    return avg_delivery_time, valid_orders
+else:
+    st.error("Kolom tanggal pengiriman tidak ditemukan dalam dataset orders.")
 
-# Fungsi untuk analisis lokasi geografis
-def location_analysis(geo):
-    location_counts = geo['geolocation_city'].value_counts().head(10)
-    return location_counts
+# Analisis keterlambatan berdasarkan lokasi
+if 'delivery_delay_days' in orders_df.columns and 'customer_state' in orders_df.columns:
+    delay_by_state = orders_df.groupby('customer_state')['delivery_delay_days'].mean().sort_values()
 
-# Fungsi visualisasi
-def plot_bar(data, title, xlabel, ylabel, color="skyblue"):
-    fig, ax = plt.subplots()
-    data.plot(kind='bar', color=color, ax=ax)
-    ax.set_title(title)
-    ax.set_xlabel(xlabel)
-    ax.set_ylabel(ylabel)
-    return fig
+    # Visualisasi
+    fig2, ax2 = plt.subplots(figsize=(12, 6))
+    sns.barplot(x=delay_by_state.index, y=delay_by_state.values, ax=ax2)
+    ax2.set_title("Rata-Rata Keterlambatan Pengiriman per Lokasi")
+    ax2.set_xlabel("State")
+    ax2.set_ylabel("Rata-Rata Keterlambatan (Hari)")
+    plt.xticks(rotation=45)
+    st.pyplot(fig2)
+else:
+    st.error("Data keterlambatan pengiriman atau lokasi tidak tersedia untuk visualisasi.")
 
-def plot_histogram(data, title, xlabel, ylabel, bins=20, color="green"):
-    fig, ax = plt.subplots()
-    sns.histplot(data, bins=bins, kde=True, ax=ax, color=color)
-    ax.set_title(title)
-    ax.set_xlabel(xlabel)
-    ax.set_ylabel(ylabel)
-    return fig
+# Visualization 3: Hubungan Waktu Pengiriman dengan Skor Ulasan
+st.header("Visualisasi 3: Hubungan Waktu Pengiriman dengan Skor Ulasan")
+if 'order_id' in orders_df.columns and 'order_id' in orderitems_df.columns:
+    orders_reviews = pd.merge(orders_df, orderitems_df, on='order_id', how='inner')
+    if 'order_id' in orderreviews_df.columns and 'review_score' in orderreviews_df.columns:
+        orders_reviews = pd.merge(orders_reviews, orderreviews_df[['order_id', 'review_score']], on='order_id', how='left')
 
-# Load dan bersihkan data
-customers, geo, orderitems, orders, products, product_translate = load_data()
-geo, orders, products = clean_data(geo, orders, products, product_translate)
+        # Pastikan kolom tanggal sesuai tipe datetime
+        orders_reviews['order_purchase_timestamp'] = pd.to_datetime(orders_reviews['order_purchase_timestamp'], errors='coerce')
 
-# Layout aplikasi
-st.title("Dashboard Analisis E-Commerce")
-st.markdown("""
-Selamat datang di **Dashboard Analisis E-Commerce**!  
-Dashboard ini membantu Anda memahami berbagai aspek dari aktivitas penjualan, pengiriman, dan lokasi geografis.  
-Gunakan menu di samping untuk navigasi.
-""")
+        if 'order_delivered_customer_date' in orders_reviews.columns and 'order_purchase_timestamp' in orders_reviews.columns:
+            orders_reviews['delivery_time_days'] = (
+                orders_reviews['order_delivered_customer_date'] - orders_reviews['order_purchase_timestamp']
+            ).dt.days
 
-# Sidebar menu
-menu = st.sidebar.radio("Pilih Menu", [
-    "Overview", 
-    "Summary Dataset", 
-    "Analisis Produk Terpopuler", 
-    "Analisis Pengiriman", 
-    "Analisis Geografis", 
-    "Kesimpulan"
-])
-
-# Menu Overview
-if menu == "Overview":
-    st.subheader("Tahap Analisis Data")
-    st.markdown("""
-    **Tahapan yang dilakukan dalam analisis ini meliputi:**
-    1. **Data Wrangling**: Pembersihan dan persiapan dataset.
-    2. **Exploratory Data Analysis**:
-       - Analisis produk terpopuler.
-       - Analisis waktu pengiriman.
-       - Analisis lokasi geografis.
-    3. **Kesimpulan**: Menyusun temuan utama untuk mendukung pengambilan keputusan bisnis.
-    """)
-
-# Menu Summary Dataset
-elif menu == "Summary Dataset":
-    dataset = st.selectbox("Pilih Dataset", ["Customers", "Geo", "Order Items", "Orders", "Products"])
-    if dataset == "Customers":
-        data_summary(customers, "Customers")
-    elif dataset == "Geo":
-        data_summary(geo, "Geo")
-    elif dataset == "Order Items":
-        data_summary(orderitems, "Order Items")
-    elif dataset == "Orders":
-        data_summary(orders, "Orders")
-    elif dataset == "Products":
-        data_summary(products, "Products")
-
-# Menu Analisis Produk Terpopuler
-elif menu == "Analisis Produk Terpopuler":
-    st.subheader("Analisis Produk Terpopuler")
-    top_products = popular_products(orderitems, products)
-    st.markdown("**Top 10 Produk Terpopuler Berdasarkan Kategori:**")
-    st.bar_chart(top_products)
-    fig = plot_bar(top_products, "Top 10 Produk Terpopuler", "Kategori Produk", "Jumlah Pemesanan")
-    st.pyplot(fig)
-
-# Menu Analisis Pengiriman
-elif menu == "Analisis Pengiriman":
-    st.subheader("Analisis Waktu Pengiriman")
-    avg_delivery_time, valid_orders = shipping_analysis(orders)
-    st.metric(label="Rata-rata Waktu Pengiriman (hari)", value=round(avg_delivery_time, 2))
-    fig = plot_histogram(
-        valid_orders['delivery_time'],
-        "Distribusi Waktu Pengiriman (Carrier ke Customer)",
-        "Hari",
-        "Jumlah Pengiriman"
-    )
-    st.pyplot(fig)
-
-# Menu Analisis Geografis
-elif menu == "Analisis Geografis":
-    st.subheader("Analisis Lokasi Geografis")
-    location_counts = location_analysis(geo)
-    st.markdown("**Top 10 Kota dengan Aktivitas E-Commerce Tertinggi:**")
-    st.bar_chart(location_counts)
-    fig = plot_bar(location_counts, "Top 10 Kota dengan Aktivitas Tertinggi", "Kota", "Jumlah Aktivitas", color="orange")
-    st.pyplot(fig)
-
-# Menu Kesimpulan
-elif menu == "Kesimpulan":
-    st.subheader("Kesimpulan")
-    st.markdown("### Ringkasan Visualisasi")
-    
-    # 1. Produk Terpopuler
-    st.markdown("#### Produk Terpopuler")
-    top_products = popular_products(orderitems, products)
-    st.bar_chart(top_products)
-    
-    # 2. Distribusi Waktu Pengiriman
-    st.markdown("#### Distribusi Waktu Pengiriman")
-    avg_delivery_time, valid_orders = shipping_analysis(orders)
-    fig = plot_histogram(
-        valid_orders['delivery_time'],
-        "Distribusi Waktu Pengiriman (Carrier ke Customer)",
-        "Hari",
-        "Jumlah Pengiriman"
-    )
-    st.pyplot(fig)
-    
-    # 3. Lokasi Geografis
-    st.markdown("#### Aktivitas E-Commerce Berdasarkan Lokasi")
-    location_counts = location_analysis(geo)
-    st.bar_chart(location_counts)
-
-    # Kesimpulan
-    st.markdown("""
-    **Kesimpulan Akhir**:
-    - **Produk Populer**: Kategori tertentu memiliki permintaan lebih tinggi, seperti elektronik, kecantikan, dan rumah tangga.
-    - **Pengiriman**: Rata-rata waktu pengiriman dari carrier ke pelanggan adalah **8,88 hari**.
-    - **Geografis**: Kota besar mendominasi aktivitas e-commerce.
-    """)
-
-# Footer
-st.sidebar.markdown("""
-**Dibuat oleh:**  
-Indi Bagus Prasetyo  
-**Email:** endang.saefulloh@gmail.com  
-""")
+            fig3, ax3 = plt.subplots(figsize=(12, 6))
+            sns.boxplot(data=orders_reviews, x='review_score', y='delivery_time_days', ax=ax3)
+            ax3.set_title("Hubungan Waktu Pengiriman dengan Skor Ulasan")
+            ax3.set_xlabel("Skor Ulasan")
+            ax3.set_ylabel("Waktu Pengiriman (Hari)")
+            st.pyplot(fig3)
+        else:
+            st.error("Kolom tanggal pengiriman atau pembelian tidak tersedia atau salah format.")
+    else:
+        st.error("Kolom 'review_score' atau 'order_id' tidak tersedia dalam dataset ulasan.")
+else:
+    st.error("Kolom 'order_id' tidak ditemukan dalam dataset orders atau order items.")
